@@ -13,6 +13,7 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 #else
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING 1; // added to reflect changes in versions
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
 #endif
@@ -31,29 +32,30 @@ namespace fs = std::experimental::filesystem;
 #endif
 
 #include "bk/graph.h"
-#include "nbk/graph.h"
+// #include "nbk/graph.h"
 #include "reimpls/mbk.h"
 #include "reimpls/mbk_r.h"
-#include "reimpls/liusun.h"
-#include "reimpls/parallel_ibfs.h"
+// #include "reimpls/liusun.h"
+// #include "reimpls/parallel_ibfs.h"
 #include "reimpls/eibfs_i.h"
 #include "reimpls/eibfs_i_nr.h"
-#include "reimpls/parallel_pr.h"
-#include "reimpls/strandmarkkahl.h"
+// #include "reimpls/parallel_pr.h"
+// #include "reimpls/strandmarkkahl.h"
 #include "ibfs/ibfs.h"
 #include "reimpls/hpf.h"
 #include "hi_pr/hi_pr.h"
-#include "sppr/maxFlow.h"
+// #include "sppr/maxFlow.h"
+#include <fcbk/fcbk.hpp>
 
-#if PARD_IS_AVAILABLE
-#include <cstdlib>
-#include "d_maxflow/parallel_ARD1.h"
-#include "d_maxflow/dimacs_parser.h"
-#include "d_maxflow/region_graph.h"
-#include "d_maxflow/region_splitter2.h"
-#endif
+// #if PARD_IS_AVAILABLE
+// #include <cstdlib>
+// #include "d_maxflow/parallel_ARD1.h"
+// #include "d_maxflow/dimacs_parser.h"
+// #include "d_maxflow/region_graph.h"
+// #include "d_maxflow/region_splitter2.h"
+// #endif
 
-#include "reimpls/robin_hood.h"
+// #include "reimpls/robin_hood.h"
 
 using Duration = std::chrono::duration<double>;
 static const auto now = std::chrono::steady_clock::now;
@@ -84,6 +86,8 @@ enum Algorithm {
     ALGO_NBK,
     ALGO_MBK,
     ALGO_MBK2,
+    ALGO_CBK,
+    ALGO_FCBK,
     ALGO_EIBFS,
     ALGO_EIBFS2,
     ALGO_EIBFS_OLD,
@@ -218,6 +222,7 @@ std::tuple<Flow, double, double> bench_bk(BenchConfig config, const Data& data)
     return std::make_tuple(flow, build_dur.count(), solve_dur.count());
 }
 
+/*
 template <class Cap, class Term, class Flow, class Index, class Data>
 std::tuple<Flow, double, double> bench_nbk(BenchConfig config, const Data& data)
 {
@@ -240,6 +245,7 @@ std::tuple<Flow, double, double> bench_nbk(BenchConfig config, const Data& data)
 
 	return std::make_tuple(flow, build_dur.count(), solve_dur.count());
 }
+*/
 
 template <class Cap, class Term, class Flow, class Index, class Data>
 std::tuple<Flow, double, double> bench_mbk(BenchConfig config, const Data& data)
@@ -286,6 +292,95 @@ std::tuple<Flow, double, double> bench_mbk2(BenchConfig config, const Data& data
     Duration solve_dur = now() - solve_begin;
 
     return std::make_tuple(flow, build_dur.count(), solve_dur.count());
+}
+template <class Flow, class Data, class AbsNodeIdx>
+std::tuple<Flow, double, double> bench_cbk(BenchConfig config, const Data& data)
+{
+    // Build graph.
+    auto build_begin = now();
+    if (sizeof(AbsNodeIdx) == sizeof(uint32_t)) {
+        fcbk::Graph<uint32_t, false> graph(data.num_nodes);
+        // graph.add_vertices(data.num_nodes); // do not add, as ^^ sets the correct size
+        for (const auto& tarc : data.terminal_arcs) {
+            graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+        }
+        for (const auto& narc : data.neighbor_arcs) {
+            graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+        }
+        graph.init_maxflow();
+        Duration build_dur = now() - build_begin;
+
+        // Solve graph.
+        auto solve_begin = now();
+        auto flow = graph.maxflow();
+        Duration solve_dur = now() - solve_begin;
+
+        return std::make_tuple(flow, build_dur.count(), solve_dur.count());
+    }
+    else {
+        fcbk::Graph<uint64_t, false> graph(data.num_nodes);
+        // graph.add_vertices(data.num_nodes); // do not add, as ^^ sets the correct size
+        for (const auto& tarc : data.terminal_arcs) {
+            graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+        }
+        for (const auto& narc : data.neighbor_arcs) {
+            graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+        }
+        graph.init_maxflow();
+        Duration build_dur = now() - build_begin;
+
+        // Solve graph.
+        auto solve_begin = now();
+        auto flow = graph.maxflow();
+        Duration solve_dur = now() - solve_begin;
+
+        return std::make_tuple(flow, build_dur.count(), solve_dur.count());
+    }
+}
+
+template <class Flow, class Data, class AbsNodeIdx>
+std::tuple<Flow, double, double> bench_fcbk(BenchConfig config, const Data& data)
+{
+    // Build graph.
+    auto build_begin = now();
+    if (sizeof(AbsNodeIdx) == sizeof(uint32_t)) {
+        fcbk::Graph<uint32_t, true> graph(data.num_nodes);
+        // graph.add_vertices(data.num_nodes); // do not add, as ^^ sets the correct size
+        for (const auto& tarc : data.terminal_arcs) {
+            graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+        }
+        for (const auto& narc : data.neighbor_arcs) {
+            graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+        }
+        graph.init_maxflow();
+        Duration build_dur = now() - build_begin;
+
+        // Solve graph.
+        auto solve_begin = now();
+        auto flow = graph.maxflow();
+        Duration solve_dur = now() - solve_begin;
+
+        return std::make_tuple(flow, build_dur.count(), solve_dur.count());
+    }
+    else {
+        fcbk::Graph<uint64_t, true> graph(data.num_nodes);
+        // graph.add_vertices(data.num_nodes); // do not add, as ^^ sets the correct size
+        for (const auto& tarc : data.terminal_arcs) {
+            graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+        }
+        for (const auto& narc : data.neighbor_arcs) {
+            graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+        }
+        graph.init_maxflow();
+        Duration build_dur = now() - build_begin;
+
+        // Solve graph.
+        auto solve_begin = now();
+        auto flow = graph.maxflow();
+        Duration solve_dur = now() - solve_begin;
+
+        return std::make_tuple(flow, build_dur.count(), solve_dur.count());
+    }
 }
 
 template <class Cap, class Term, class Flow, class Index, class Data>
@@ -624,514 +719,514 @@ std::tuple<Flow, double, double> bench_gridcut(
 #endif
 }
 
-template <class Cap, class Term, class Flow, class Index, class Data>
-std::tuple<Flow, double, double, uint16_t> bench_parallel_mbk(
-    BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
-{
-    auto block_intervals = split_block_intervals(node_blocks);
+// template <class Cap, class Term, class Flow, class Index, class Data>
+// std::tuple<Flow, double, double, uint16_t> bench_parallel_mbk(
+//     BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
+// {
+//     auto block_intervals = split_block_intervals(node_blocks);
 
-    // Build graph.
-    auto build_begin = now();
-    reimpls::ParallelGraph<Cap, Term, Flow> graph(data.num_nodes, data.neighbor_arcs.size(), num_blocks);
-    graph.set_num_threads(config.num_threads);
+//     // Build graph.
+//     auto build_begin = now();
+//     reimpls::ParallelGraph<Cap, Term, Flow> graph(data.num_nodes, data.neighbor_arcs.size(), num_blocks);
+//     graph.set_num_threads(config.num_threads);
 
-    Index added_nodes = 0;
-    for (const auto& itv : block_intervals) {
-        // itv = { interval_length, block_index }
-        graph.add_node(itv.first, itv.second);
-        added_nodes += itv.first;
-    }
-    if (added_nodes < data.num_nodes) {
-        // Data was likely a .bq file so need to repeat blocks
-        for (const auto& itv : block_intervals) {
-            // itv = { interval_length, block_index }
-            graph.add_node(itv.first, itv.second);
-        }
-    }
+//     Index added_nodes = 0;
+//     for (const auto& itv : block_intervals) {
+//         // itv = { interval_length, block_index }
+//         graph.add_node(itv.first, itv.second);
+//         added_nodes += itv.first;
+//     }
+//     if (added_nodes < data.num_nodes) {
+//         // Data was likely a .bq file so need to repeat blocks
+//         for (const auto& itv : block_intervals) {
+//             // itv = { interval_length, block_index }
+//             graph.add_node(itv.first, itv.second);
+//         }
+//     }
 
-    for (const auto& tarc : data.terminal_arcs) {
-        graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
-    }
-    for (const auto& narc : data.neighbor_arcs) {
-        graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap, false);
-    }
-    Duration build_dur = now() - build_begin;
+//     for (const auto& tarc : data.terminal_arcs) {
+//         graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+//     }
+//     for (const auto& narc : data.neighbor_arcs) {
+//         graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap, false);
+//     }
+//     Duration build_dur = now() - build_begin;
 
-    // Solve graph.
-    auto solve_begin = now();
-    auto flow = graph.maxflow();
-    Duration solve_dur = now() - solve_begin;
+//     // Solve graph.
+//     auto solve_begin = now();
+//     auto flow = graph.maxflow();
+//     Duration solve_dur = now() - solve_begin;
 
-    return std::make_tuple(flow, build_dur.count(), solve_dur.count(), num_blocks);
-}
+//     return std::make_tuple(flow, build_dur.count(), solve_dur.count(), num_blocks);
+// }
 
-template <class Cap, class Term, class Flow, class Index, class Data>
-std::tuple<Flow, double, double, uint16_t> bench_parallel_pr(
-    BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
-{
-    if (!std::is_same<Cap, int32_t>::value) {
-        throw std::runtime_error("Only int32_t cap is supported for ppr");
-    }
-    /*auto build_begin = now();
-    reimpls::ParallelPushRelabel<int32_t, int64_t, Index, Index> graph(
-        data.num_nodes + 2, data.neighbor_arcs.size() + data.terminal_arcs.size());
-    graph.set_source(0);
-    graph.set_sink(1);
+// template <class Cap, class Term, class Flow, class Index, class Data>
+// std::tuple<Flow, double, double, uint16_t> bench_parallel_pr(
+//     BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
+// {
+//     if (!std::is_same<Cap, int32_t>::value) {
+//         throw std::runtime_error("Only int32_t cap is supported for ppr");
+//     }
+//     /*auto build_begin = now();
+//     reimpls::ParallelPushRelabel<int32_t, int64_t, Index, Index> graph(
+//         data.num_nodes + 2, data.neighbor_arcs.size() + data.terminal_arcs.size());
+//     graph.set_source(0);
+//     graph.set_sink(1);
 
-    for (const auto& tarc : data.terminal_arcs) {
-        graph.add_edge(0, tarc.node + 2, tarc.source_cap, 0);
-        graph.add_edge(tarc.node + 2, 1, tarc.sink_cap, 0);
-    }
-    for (const auto& narc : data.neighbor_arcs) {
-        graph.add_edge(narc.i + 2, narc.j + 2, narc.cap, narc.rev_cap);
-    }
-    Duration build_dur = now() - build_begin;
+//     for (const auto& tarc : data.terminal_arcs) {
+//         graph.add_edge(0, tarc.node + 2, tarc.source_cap, 0);
+//         graph.add_edge(tarc.node + 2, 1, tarc.sink_cap, 0);
+//     }
+//     for (const auto& narc : data.neighbor_arcs) {
+//         graph.add_edge(narc.i + 2, narc.j + 2, narc.cap, narc.rev_cap);
+//     }
+//     Duration build_dur = now() - build_begin;
 
-    graph.set_num_threads(config.num_threads);
+//     graph.set_num_threads(config.num_threads);
 
-    auto solve_begin = now();
-    graph.mincut();
-    Duration solve_dur = now() - solve_begin;
+//     auto solve_begin = now();
+//     graph.mincut();
+//     Duration solve_dur = now() - solve_begin;
 
-    return std::make_tuple(graph.get_flow(), build_dur.count(), solve_dur.count(), data.num_nodes);*/
+//     return std::make_tuple(graph.get_flow(), build_dur.count(), solve_dur.count(), data.num_nodes);*/
 
-    auto build_begin = now();
+//     auto build_begin = now();
 
-    size_t num_nodes = data.num_nodes + 2;
-    size_t num_arcs = 2 * (data.terminal_arcs.size() + data.neighbor_arcs.size());
-    std::vector<wghVertex<int>> verts(num_arcs);
-    std::vector<int> neighbors(num_arcs, -1);
-    std::vector<int> arc_weights(num_arcs, 0);
+//     size_t num_nodes = data.num_nodes + 2;
+//     size_t num_arcs = 2 * (data.terminal_arcs.size() + data.neighbor_arcs.size());
+//     std::vector<wghVertex<int>> verts(num_arcs);
+//     std::vector<int> neighbors(num_arcs, -1);
+//     std::vector<int> arc_weights(num_arcs, 0);
 
-    int source = 0;
-    int sink = 1;
+//     int source = 0;
+//     int sink = 1;
 
-    wghGraph<int> wg(verts.data(), num_nodes, num_arcs);
+//     wghGraph<int> wg(verts.data(), num_nodes, num_arcs);
 
-    size_t total_arcs = 0;
-    for (const auto& tarc : data.terminal_arcs) {
-        if (tarc.source_cap > tarc.sink_cap) {
-            wg.V[source].degree++;
-        } else {
-            wg.V[sink].degree++;
-        }
-        wg.V[tarc.node].degree++;
-    }
-    for (const auto& narc : data.neighbor_arcs) {
-        wg.V[narc.i + 2].degree++;
-        wg.V[narc.j + 2].degree++;
-    }
+//     size_t total_arcs = 0;
+//     for (const auto& tarc : data.terminal_arcs) {
+//         if (tarc.source_cap > tarc.sink_cap) {
+//             wg.V[source].degree++;
+//         } else {
+//             wg.V[sink].degree++;
+//         }
+//         wg.V[tarc.node].degree++;
+//     }
+//     for (const auto& narc : data.neighbor_arcs) {
+//         wg.V[narc.i + 2].degree++;
+//         wg.V[narc.j + 2].degree++;
+//     }
 
-    std::vector<int> offsets(num_nodes + 2, 0);
-    for (size_t i = 1; i < num_nodes; ++i) {
-        offsets[i] = offsets[i - 1] + wg.V[i - 1].degree;
-    }
+//     std::vector<int> offsets(num_nodes + 2, 0);
+//     for (size_t i = 1; i < num_nodes; ++i) {
+//         offsets[i] = offsets[i - 1] + wg.V[i - 1].degree;
+//     }
 
-    int64_t flow = 0;
-    for (const auto& tarc : data.terminal_arcs) {
-        if (tarc.source_cap > tarc.sink_cap) {
-            neighbors[offsets[source]] = tarc.node + 2;
-            neighbors[offsets[tarc.node + 2]] = source;
+//     int64_t flow = 0;
+//     for (const auto& tarc : data.terminal_arcs) {
+//         if (tarc.source_cap > tarc.sink_cap) {
+//             neighbors[offsets[source]] = tarc.node + 2;
+//             neighbors[offsets[tarc.node + 2]] = source;
 
-            arc_weights[offsets[source]] = tarc.source_cap - tarc.sink_cap;
-            arc_weights[offsets[tarc.node + 2]] = 0;
+//             arc_weights[offsets[source]] = tarc.source_cap - tarc.sink_cap;
+//             arc_weights[offsets[tarc.node + 2]] = 0;
 
-            flow += tarc.sink_cap;
-            offsets[source]++;
-        } else {
-            neighbors[offsets[sink]] = tarc.node + 2;
-            neighbors[offsets[tarc.node + 2]] = sink;
+//             flow += tarc.sink_cap;
+//             offsets[source]++;
+//         } else {
+//             neighbors[offsets[sink]] = tarc.node + 2;
+//             neighbors[offsets[tarc.node + 2]] = sink;
 
-            arc_weights[offsets[sink]] = 0;
-            arc_weights[offsets[tarc.node + 2]] = tarc.sink_cap - tarc.source_cap;
+//             arc_weights[offsets[sink]] = 0;
+//             arc_weights[offsets[tarc.node + 2]] = tarc.sink_cap - tarc.source_cap;
 
-            flow += tarc.source_cap;
-            offsets[sink]++;
-        }
-        offsets[tarc.node + 2]++;
-    }
-    for (const auto& narc : data.neighbor_arcs) {
-        neighbors[offsets[narc.i + 2]] = narc.j + 2;
-        neighbors[offsets[narc.j + 2]] = narc.i + 2;
+//             flow += tarc.source_cap;
+//             offsets[sink]++;
+//         }
+//         offsets[tarc.node + 2]++;
+//     }
+//     for (const auto& narc : data.neighbor_arcs) {
+//         neighbors[offsets[narc.i + 2]] = narc.j + 2;
+//         neighbors[offsets[narc.j + 2]] = narc.i + 2;
 
-        arc_weights[offsets[narc.i + 2]] = narc.cap;
-        arc_weights[offsets[narc.j + 2]] = narc.rev_cap;
+//         arc_weights[offsets[narc.i + 2]] = narc.cap;
+//         arc_weights[offsets[narc.j + 2]] = narc.rev_cap;
 
-        offsets[narc.i + 2]++;
-        offsets[narc.j + 2]++;
-    }
+//         offsets[narc.i + 2]++;
+//         offsets[narc.j + 2]++;
+//     }
 
-    wg.V[0].Neighbors = neighbors.data();
-    wg.V[0].nghWeights = arc_weights.data();
-    for (size_t i = 1; i < num_nodes; ++i) {
-        wg.V[i].Neighbors = wg.V[i - 1].Neighbors + wg.V[i - 1].degree;
-        wg.V[i].nghWeights = wg.V[i - 1].nghWeights + wg.V[i - 1].degree;
-    }
+//     wg.V[0].Neighbors = neighbors.data();
+//     wg.V[0].nghWeights = arc_weights.data();
+//     for (size_t i = 1; i < num_nodes; ++i) {
+//         wg.V[i].Neighbors = wg.V[i - 1].Neighbors + wg.V[i - 1].degree;
+//         wg.V[i].nghWeights = wg.V[i - 1].nghWeights + wg.V[i - 1].degree;
+//     }
 
-    FlowGraph<int> g(wg, source, sink);
-    setWorkers(config.num_threads);
-    prepareMaxFlow(g);
+//     FlowGraph<int> g(wg, source, sink);
+//     setWorkers(config.num_threads);
+//     prepareMaxFlow(g);
 
-    Duration build_dur = now() - build_begin;
+//     Duration build_dur = now() - build_begin;
 
-    auto solve_begin = now();
-    flow += maxFlow();
-    Duration solve_dur = now() - solve_begin;
+//     auto solve_begin = now();
+//     flow += maxFlow();
+//     Duration solve_dur = now() - solve_begin;
 
-    return std::make_tuple(flow, build_dur.count(), solve_dur.count(), data.num_nodes);
-}
+//     return std::make_tuple(flow, build_dur.count(), solve_dur.count(), data.num_nodes);
+// }
 
-template <class Cap, class Term, class Flow, class Index, class Data>
-std::tuple<Flow, double, double, uint16_t> bench_parallel_sk(
-    BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
-{
-    if (node_blocks.size() < data.num_nodes) {
-        // Data was likely as .bq file so need to repeat blocks
-        auto old_size = node_blocks.size();
-        node_blocks.resize(2 * old_size);
-        std::copy_n(node_blocks.begin(), old_size, node_blocks.begin() + old_size);
-    }
+// template <class Cap, class Term, class Flow, class Index, class Data>
+// std::tuple<Flow, double, double, uint16_t> bench_parallel_sk(
+//     BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
+// {
+//     if (node_blocks.size() < data.num_nodes) {
+//         // Data was likely as .bq file so need to repeat blocks
+//         auto old_size = node_blocks.size();
+//         node_blocks.resize(2 * old_size);
+//         std::copy_n(node_blocks.begin(), old_size, node_blocks.begin() + old_size);
+//     }
 
-    unsigned int num_threads = config.num_threads;
-    uint16_t blocks_per_thread = num_blocks / num_threads;
-    if (blocks_per_thread == 0) {
-        // Have more threads than blocks, just use one thread per block
-        blocks_per_thread = 1;
-        num_threads = num_blocks;
-    }
+//     unsigned int num_threads = config.num_threads;
+//     uint16_t blocks_per_thread = num_blocks / num_threads;
+//     if (blocks_per_thread == 0) {
+//         // Have more threads than blocks, just use one thread per block
+//         blocks_per_thread = 1;
+//         num_threads = num_blocks;
+//     }
 
-    // Update node_blocks so blocks have their correct block indices
-    for (auto& block : node_blocks) {
-        block = std::min<uint16_t>(block / blocks_per_thread, num_threads - 1);
-    }
+//     // Update node_blocks so blocks have their correct block indices
+//     for (auto& block : node_blocks) {
+//         block = std::min<uint16_t>(block / blocks_per_thread, num_threads - 1);
+//     }
 
-    // Find nodes we need to make shared across multiple blocks
-    std::vector<robin_hood::unordered_set<uint64_t>> extra_block_nodes(num_threads);
-    for (const auto& narc : data.neighbor_arcs) {
-        uint16_t bi = node_blocks[narc.i];
-        uint16_t bj = node_blocks[narc.j];
-        if (bi != bj && (narc.cap != 0 || narc.rev_cap != 0)) {
-            //if (bi < bj) {
-                extra_block_nodes[bi].insert(narc.j);
-            //} else {
-                extra_block_nodes[bj].insert(narc.i);
-            //}
-        }
-    }
+//     // Find nodes we need to make shared across multiple blocks
+//     std::vector<robin_hood::unordered_set<uint64_t>> extra_block_nodes(num_threads);
+//     for (const auto& narc : data.neighbor_arcs) {
+//         uint16_t bi = node_blocks[narc.i];
+//         uint16_t bj = node_blocks[narc.j];
+//         if (bi != bj && (narc.cap != 0 || narc.rev_cap != 0)) {
+//             //if (bi < bj) {
+//                 extra_block_nodes[bi].insert(narc.j);
+//             //} else {
+//                 extra_block_nodes[bj].insert(narc.i);
+//             //}
+//         }
+//     }
 
-    auto block_intervals = split_block_intervals(node_blocks);
+//     auto block_intervals = split_block_intervals(node_blocks);
 
-    auto build_begin = now();
-    size_t edges_per_block = data.neighbor_arcs.size() / config.num_threads;
-    reimpls::ParallelSkGraph<Cap, Term, Flow, typename std::make_signed<Index>::type> graph(
-        data.num_nodes, edges_per_block + edges_per_block / 5);
-    graph.add_node(data.num_nodes);
+//     auto build_begin = now();
+//     size_t edges_per_block = data.neighbor_arcs.size() / config.num_threads;
+//     reimpls::ParallelSkGraph<Cap, Term, Flow, typename std::make_signed<Index>::type> graph(
+//         data.num_nodes, edges_per_block + edges_per_block / 5);
+//     graph.add_node(data.num_nodes);
 
-    Index added_nodes = 0;
-    for (const auto& itv : block_intervals) {
-        // itv = { interval_length, block_index }
-        graph.add_nodes_to_block(added_nodes, added_nodes + itv.first, itv.second);
-        added_nodes += itv.first;
-    }
-    for (uint16_t block = 0; block < num_threads; ++block) {
-        for (uint64_t i : extra_block_nodes[block]) {
-            graph.add_nodes_to_block(i, i+1, block);
-        }
-    }
+//     Index added_nodes = 0;
+//     for (const auto& itv : block_intervals) {
+//         // itv = { interval_length, block_index }
+//         graph.add_nodes_to_block(added_nodes, added_nodes + itv.first, itv.second);
+//         added_nodes += itv.first;
+//     }
+//     for (uint16_t block = 0; block < num_threads; ++block) {
+//         for (uint64_t i : extra_block_nodes[block]) {
+//             graph.add_nodes_to_block(i, i+1, block);
+//         }
+//     }
 
-    for (const auto& tarc : data.terminal_arcs) {
-        if (tarc.source_cap != 0 || tarc.sink_cap != 0) {
-            graph.add_tweights(tarc.node, tarc.source_cap * 2, tarc.sink_cap * 2);
-        }
-    }
-    for (const auto& narc : data.neighbor_arcs) {
-        if (narc.cap != 0 || narc.rev_cap != 0) {
-            graph.add_edge(narc.i, narc.j, narc.cap * 2, narc.rev_cap * 2);
-        }
-    }
+//     for (const auto& tarc : data.terminal_arcs) {
+//         if (tarc.source_cap != 0 || tarc.sink_cap != 0) {
+//             graph.add_tweights(tarc.node, tarc.source_cap * 2, tarc.sink_cap * 2);
+//         }
+//     }
+//     for (const auto& narc : data.neighbor_arcs) {
+//         if (narc.cap != 0 || narc.rev_cap != 0) {
+//             graph.add_edge(narc.i, narc.j, narc.cap * 2, narc.rev_cap * 2);
+//         }
+//     }
 
-    Duration build_dur = now() - build_begin;
+//     Duration build_dur = now() - build_begin;
 
-    auto solve_begin = now();
-    auto flow = graph.maxflow() / 2;
-    Duration solve_dur = now() - solve_begin;
+//     auto solve_begin = now();
+//     auto flow = graph.maxflow() / 2;
+//     Duration solve_dur = now() - solve_begin;
 
-    return std::make_tuple(flow, build_dur.count(), solve_dur.count(), config.num_threads);
-}
+//     return std::make_tuple(flow, build_dur.count(), solve_dur.count(), config.num_threads);
+// }
 
-template <class Cap, class Term, class Flow, class Index, class Data>
-std::tuple<Flow, double, double, uint16_t> bench_parallel_rd(
-    BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
-{
-#ifdef PARD_IS_AVAILABLE
-    constexpr int source = 0;
-    constexpr int sink = 1;
-    const std::string tstamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    const std::string splitter_file = "pard_tmp_splitter_t" + tstamp;
-    const int d = 1;
-    int size[] = { data.num_nodes };
+// template <class Cap, class Term, class Flow, class Index, class Data>
+// std::tuple<Flow, double, double, uint16_t> bench_parallel_rd(
+//     BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
+// {
+// #ifdef PARD_IS_AVAILABLE
+//     constexpr int source = 0;
+//     constexpr int sink = 1;
+//     const std::string tstamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+//     const std::string splitter_file = "pard_tmp_splitter_t" + tstamp;
+//     const int d = 1;
+//     int size[] = { data.num_nodes };
 
-    // Remove previous output directory
-    std::string dir_name = splitter_file + "_reg";
-    fs::remove_all(dir_name);
+//     // Remove previous output directory
+//     std::string dir_name = splitter_file + "_reg";
+//     fs::remove_all(dir_name);
 
-    if (node_blocks.size() < data.num_nodes) {
-        // Data was likely as .bq file so need to repeat blocks
-        auto old_size = node_blocks.size();
-        node_blocks.resize(2 * old_size);
-        std::copy_n(node_blocks.begin(), old_size, node_blocks.begin() + old_size);
-    }
+//     if (node_blocks.size() < data.num_nodes) {
+//         // Data was likely as .bq file so need to repeat blocks
+//         auto old_size = node_blocks.size();
+//         node_blocks.resize(2 * old_size);
+//         std::copy_n(node_blocks.begin(), old_size, node_blocks.begin() + old_size);
+//     }
 
-    unsigned int num_threads = config.num_threads;
-    uint16_t blocks_per_thread = num_blocks / (2 * num_threads);
-    if (blocks_per_thread == 0) {
-        // Have more threads than blocks, just use one thread per block
-        blocks_per_thread = num_blocks == 1 ? 1 : 2;
-        num_threads = num_blocks;
-    }
+//     unsigned int num_threads = config.num_threads;
+//     uint16_t blocks_per_thread = num_blocks / (2 * num_threads);
+//     if (blocks_per_thread == 0) {
+//         // Have more threads than blocks, just use one thread per block
+//         blocks_per_thread = num_blocks == 1 ? 1 : 2;
+//         num_threads = num_blocks;
+//     }
 
-    // Update node_blocks so blocks have their correct block indices
-    uint16_t used_blocks = 0;
-    for (auto& block : node_blocks) {
-        block = std::min<uint16_t>(block / blocks_per_thread, 2*num_threads);
-        used_blocks = std::max<uint16_t>(used_blocks, block);
-    }
-    used_blocks++; // Used blocks holds the max. block index so add one to get number of blocks
+//     // Update node_blocks so blocks have their correct block indices
+//     uint16_t used_blocks = 0;
+//     for (auto& block : node_blocks) {
+//         block = std::min<uint16_t>(block / blocks_per_thread, 2*num_threads);
+//         used_blocks = std::max<uint16_t>(used_blocks, block);
+//     }
+//     used_blocks++; // Used blocks holds the max. block index so add one to get number of blocks
     
-    auto build_begin = now();
+//     auto build_begin = now();
 
-    region_graph G;
-    G.pth = dir_name;
-    region_splitter2 splitter(splitter_file, &G, used_blocks, node_blocks);
+//     region_graph G;
+//     G.pth = dir_name;
+//     region_splitter2 splitter(splitter_file, &G, used_blocks, node_blocks);
 
-    parallel_ARD1 pard;
-    pard.params.n_threads = num_threads;
-    pard.construct(&G);
-    splitter.allocate1(data.num_nodes + 2, 0, source, sink, d, size);
+//     parallel_ARD1 pard;
+//     pard.params.n_threads = num_threads;
+//     pard.construct(&G);
+//     splitter.allocate1(data.num_nodes + 2, 0, source, sink, d, size);
 
-    // Add edges
-    for (int loop = 0; loop < 2; ++loop) {
-        for (const auto& tarc : data.terminal_arcs) {
-            splitter.read_arc(loop, source, tarc.node + 2, tarc.source_cap, 0);
-            splitter.read_arc(loop, tarc.node + 2, sink, tarc.sink_cap, 0);
-        }
-        for (const auto& narc : data.neighbor_arcs) {
-            splitter.read_arc(loop, narc.i + 2, narc.j + 2, narc.cap, narc.rev_cap);
-        }
-        splitter.allocate2(loop);
-    }
-    splitter.allocate3();
+//     // Add edges
+//     for (int loop = 0; loop < 2; ++loop) {
+//         for (const auto& tarc : data.terminal_arcs) {
+//             splitter.read_arc(loop, source, tarc.node + 2, tarc.source_cap, 0);
+//             splitter.read_arc(loop, tarc.node + 2, sink, tarc.sink_cap, 0);
+//         }
+//         for (const auto& narc : data.neighbor_arcs) {
+//             splitter.read_arc(loop, narc.i + 2, narc.j + 2, narc.cap, narc.rev_cap);
+//         }
+//         splitter.allocate2(loop);
+//     }
+//     splitter.allocate3();
 
-    Duration build_dur = now() - build_begin;
+//     Duration build_dur = now() - build_begin;
 
-    //auto solve_begin = now();
-    int flow = pard.maxflow();
-    //Duration solve_dur = now() - solve_begin;
+//     //auto solve_begin = now();
+//     int flow = pard.maxflow();
+//     //Duration solve_dur = now() - solve_begin;
 
-    // Remove output directory since we're done
-    fs::remove_all(dir_name);
+//     // Remove output directory since we're done
+//     fs::remove_all(dir_name);
 
-    // To avoid including the time to read in the problem from disk in the solve time, we rely on
-    // the internal timer of the implementation here. For the build time, our external timer seems
-    // to give a more fair assessment (although it's longer than needed since it does include some
-    // disk I/O).
-    return std::make_tuple(flow, build_dur.count(), pard.info.solve_t.time(), used_blocks);
-#else
-    throw std::runtime_error("P-ARD is not available");
-#endif
-}
+//     // To avoid including the time to read in the problem from disk in the solve time, we rely on
+//     // the internal timer of the implementation here. For the build time, our external timer seems
+//     // to give a more fair assessment (although it's longer than needed since it does include some
+//     // disk I/O).
+//     return std::make_tuple(flow, build_dur.count(), pard.info.solve_t.time(), used_blocks);
+// #else
+//     throw std::runtime_error("P-ARD is not available");
+// #endif
+// }
 
-template <class Cap, class Term, class Flow, class Index, class Data>
-std::tuple<Flow, double, double, uint16_t> bench_parallel_eibfs(
-    BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
-{
-    using Ibfs = reimpls::ParallelIbfs<Cap, Term, Flow>;
-    auto block_intervals = split_block_intervals(node_blocks);
+// template <class Cap, class Term, class Flow, class Index, class Data>
+// std::tuple<Flow, double, double, uint16_t> bench_parallel_eibfs(
+//     BenchConfig config, const Data& data, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
+// {
+//     using Ibfs = reimpls::ParallelIbfs<Cap, Term, Flow>;
+//     auto block_intervals = split_block_intervals(node_blocks);
 
-    // Build graph.
-    auto build_begin = now();
-    Ibfs graph(data.num_nodes, data.neighbor_arcs.size());
-    graph.setNumThreads(config.num_threads);
+//     // Build graph.
+//     auto build_begin = now();
+//     Ibfs graph(data.num_nodes, data.neighbor_arcs.size());
+//     graph.setNumThreads(config.num_threads);
 
-    Index added_nodes = 0;
-    for (const auto& itv : block_intervals) {
-        // itv = { interval_length, block_index }
-        graph.registerNodes(added_nodes, added_nodes + itv.first, itv.second);
-        added_nodes += itv.first;
-    }
-    if (added_nodes < data.num_nodes) {
-        // Data was likely a .bq file so need to repeat blocks
-        for (const auto& itv : block_intervals) {
-            // itv = { interval_length, block_index }
-            graph.registerNodes(added_nodes, added_nodes + itv.first, itv.second);
-        }
-    }
+//     Index added_nodes = 0;
+//     for (const auto& itv : block_intervals) {
+//         // itv = { interval_length, block_index }
+//         graph.registerNodes(added_nodes, added_nodes + itv.first, itv.second);
+//         added_nodes += itv.first;
+//     }
+//     if (added_nodes < data.num_nodes) {
+//         // Data was likely a .bq file so need to repeat blocks
+//         for (const auto& itv : block_intervals) {
+//             // itv = { interval_length, block_index }
+//             graph.registerNodes(added_nodes, added_nodes + itv.first, itv.second);
+//         }
+//     }
 
-    for (const auto& tarc : data.terminal_arcs) {
-        graph.addNode(tarc.node, tarc.source_cap, tarc.sink_cap);
-    }
-    for (const auto& narc : data.neighbor_arcs) {
-        graph.addEdge(narc.i, narc.j, narc.cap, narc.rev_cap);
-    }
-    graph.initGraph();
-    Duration build_dur = now() - build_begin;
+//     for (const auto& tarc : data.terminal_arcs) {
+//         graph.addNode(tarc.node, tarc.source_cap, tarc.sink_cap);
+//     }
+//     for (const auto& narc : data.neighbor_arcs) {
+//         graph.addEdge(narc.i, narc.j, narc.cap, narc.rev_cap);
+//     }
+//     graph.initGraph();
+//     Duration build_dur = now() - build_begin;
 
-    // Solve graph.
-    auto solve_begin = now();
-    auto flow = graph.computeMaxFlow();
-    Duration solve_dur = now() - solve_begin;
+//     // Solve graph.
+//     auto solve_begin = now();
+//     auto flow = graph.computeMaxFlow();
+//     Duration solve_dur = now() - solve_begin;
 
-    return std::make_tuple(flow, build_dur.count(), solve_dur.count(), num_blocks);
-}
+//     return std::make_tuple(flow, build_dur.count(), solve_dur.count(), num_blocks);
+// }
 
-template <class Cap, class Term, class Flow, class Index, class Data>
-std::tuple<Flow, double, double, uint16_t> bench_parallel_gridcut(
-    BenchConfig config, const Data& data, const DataConfig& data_config, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
-{
-#ifdef GRIDCUT_IS_AVAILABLE
-    size_t width = data_config.grid_width;
-    size_t height = data_config.grid_height;
-    size_t depth = data_config.grid_depth;
-    assert(data.num_nodes == width * height * depth);
+// template <class Cap, class Term, class Flow, class Index, class Data>
+// std::tuple<Flow, double, double, uint16_t> bench_parallel_gridcut(
+//     BenchConfig config, const Data& data, const DataConfig& data_config, std::vector<uint16_t> node_blocks, uint16_t num_blocks)
+// {
+// #ifdef GRIDCUT_IS_AVAILABLE
+//     size_t width = data_config.grid_width;
+//     size_t height = data_config.grid_height;
+//     size_t depth = data_config.grid_depth;
+//     assert(data.num_nodes == width * height * depth);
 
-    // Prepare arrays with terminal capacities
-    std::vector<Term> source_caps(data.num_nodes, 0);
-    std::vector<Term> sink_caps(data.num_nodes, 0);
+//     // Prepare arrays with terminal capacities
+//     std::vector<Term> source_caps(data.num_nodes, 0);
+//     std::vector<Term> sink_caps(data.num_nodes, 0);
 
-    for (const auto& tarc : data.terminal_arcs) {
-        source_caps[tarc.node] += tarc.source_cap;
-        sink_caps[tarc.node] += tarc.sink_cap;
-    }
+//     for (const auto& tarc : data.terminal_arcs) {
+//         source_caps[tarc.node] += tarc.source_cap;
+//         sink_caps[tarc.node] += tarc.sink_cap;
+//     }
 
-    // Prepare arrays with neighbor capacities
-    std::array<std::array<std::array<std::vector<Cap>, 3>, 3>, 3> nbor_cap_arrays;
-    switch (data_config.grid_type)
-    {
-    case GRID_TYPE_2D_4C:
-        nbor_cap_arrays[1][0][0].resize(data.num_nodes, 0);
-        nbor_cap_arrays[1][2][0].resize(data.num_nodes, 0);
-        nbor_cap_arrays[0][1][0].resize(data.num_nodes, 0);
-        nbor_cap_arrays[2][1][0].resize(data.num_nodes, 0);
-        break;
-    case GRID_TYPE_3D_6C:
-        nbor_cap_arrays[1][1][0].resize(data.num_nodes, 0);
-        nbor_cap_arrays[1][1][2].resize(data.num_nodes, 0);
-        nbor_cap_arrays[1][0][1].resize(data.num_nodes, 0);
-        nbor_cap_arrays[1][2][1].resize(data.num_nodes, 0);
-        nbor_cap_arrays[0][1][1].resize(data.num_nodes, 0);
-        nbor_cap_arrays[2][1][1].resize(data.num_nodes, 0);
-        break;
-    default:
-        throw std::invalid_argument("Parallel GridCut cannot handle grid type");
-    }
+//     // Prepare arrays with neighbor capacities
+//     std::array<std::array<std::array<std::vector<Cap>, 3>, 3>, 3> nbor_cap_arrays;
+//     switch (data_config.grid_type)
+//     {
+//     case GRID_TYPE_2D_4C:
+//         nbor_cap_arrays[1][0][0].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[1][2][0].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[0][1][0].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[2][1][0].resize(data.num_nodes, 0);
+//         break;
+//     case GRID_TYPE_3D_6C:
+//         nbor_cap_arrays[1][1][0].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[1][1][2].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[1][0][1].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[1][2][1].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[0][1][1].resize(data.num_nodes, 0);
+//         nbor_cap_arrays[2][1][1].resize(data.num_nodes, 0);
+//         break;
+//     default:
+//         throw std::invalid_argument("Parallel GridCut cannot handle grid type");
+//     }
 
-    for (const auto& narc : data.neighbor_arcs) {
-        Vec3i ci = id2vec(narc.i, width, height);
-        Vec3i cj = id2vec(narc.j, width, height);
+//     for (const auto& narc : data.neighbor_arcs) {
+//         Vec3i ci = id2vec(narc.i, width, height);
+//         Vec3i cj = id2vec(narc.j, width, height);
 
-        Vec3i offset_i(cj.x - ci.x, cj.y - ci.y, cj.z - ci.z);
-        Vec3i offset_j(ci.x - cj.x, ci.y - cj.y, ci.z - cj.z);
+//         Vec3i offset_i(cj.x - ci.x, cj.y - ci.y, cj.z - ci.z);
+//         Vec3i offset_j(ci.x - cj.x, ci.y - cj.y, ci.z - cj.z);
 
-        // Sometimes graphs have edges that go from one end of the grid to the other
-        // GridCut can't handle this so we ignore these edges. From what we've seen, these
-        // edges to not affect the solution either. It's a little bit of an advantange to GridCut
-        // but what are you gonna do...
-        if (abs(offset_i.x) <= 1 && abs(offset_i.y) <= 1 && abs(offset_i.z) <= 1) {
-            nbor_cap_arrays[offset_i.x + 1][offset_i.y + 1][offset_i.z + 1][narc.i] += narc.cap;
-        }
-        if (abs(offset_j.x) <= 1 && abs(offset_j.y) <= 1 && abs(offset_j.z) <= 1) {
-            nbor_cap_arrays[offset_j.x + 1][offset_j.y + 1][offset_j.z + 1][narc.j] += narc.rev_cap;
-        }
-    }
+//         // Sometimes graphs have edges that go from one end of the grid to the other
+//         // GridCut can't handle this so we ignore these edges. From what we've seen, these
+//         // edges to not affect the solution either. It's a little bit of an advantange to GridCut
+//         // but what are you gonna do...
+//         if (abs(offset_i.x) <= 1 && abs(offset_i.y) <= 1 && abs(offset_i.z) <= 1) {
+//             nbor_cap_arrays[offset_i.x + 1][offset_i.y + 1][offset_i.z + 1][narc.i] += narc.cap;
+//         }
+//         if (abs(offset_j.x) <= 1 && abs(offset_j.y) <= 1 && abs(offset_j.z) <= 1) {
+//             nbor_cap_arrays[offset_j.x + 1][offset_j.y + 1][offset_j.z + 1][narc.j] += narc.rev_cap;
+//         }
+//     }
 
-    // Try to guess the block size from the block indices. We assume the blocks are axis-aligned boxes.
-    // Step 1: Find an axis-aligned bounding box for each block by looking at it's nodes
-    std::vector<Vec3i> block_mins(num_blocks, Vec3i(width + 1, height + 1, depth + 1));
-    std::vector<Vec3i> block_maxs(num_blocks);
-    for (size_t i = 0; i < node_blocks.size(); ++i) {
-        Vec3i c = id2vec(i, width, height);
+//     // Try to guess the block size from the block indices. We assume the blocks are axis-aligned boxes.
+//     // Step 1: Find an axis-aligned bounding box for each block by looking at it's nodes
+//     std::vector<Vec3i> block_mins(num_blocks, Vec3i(width + 1, height + 1, depth + 1));
+//     std::vector<Vec3i> block_maxs(num_blocks);
+//     for (size_t i = 0; i < node_blocks.size(); ++i) {
+//         Vec3i c = id2vec(i, width, height);
 
-        Vec3i& min_c = block_mins[node_blocks[i]];
-        min_c.x = std::min(min_c.x, c.x);
-        min_c.y = std::min(min_c.y, c.y);
-        min_c.z = std::min(min_c.z, c.z);
+//         Vec3i& min_c = block_mins[node_blocks[i]];
+//         min_c.x = std::min(min_c.x, c.x);
+//         min_c.y = std::min(min_c.y, c.y);
+//         min_c.z = std::min(min_c.z, c.z);
 
-        Vec3i& max_c = block_maxs[node_blocks[i]];
-        max_c.x = std::max(max_c.x, c.x);
-        max_c.y = std::max(max_c.y, c.y);
-        max_c.z = std::max(max_c.z, c.z);
-    }
-    // Step 2: Given the min and max corner of each bounding box compute the box sizes
-    std::vector<int> block_widths(num_blocks);
-    std::vector<int> block_heights(num_blocks);
-    std::vector<int> block_depths(num_blocks);
-    for (size_t i = 0; i < num_blocks; ++i) {
-        const auto& min_c = block_mins[i];
-        const auto& max_c = block_maxs[i];
-        block_widths[i] = max_c.x - min_c.x + 1;
-        block_heights[i] = max_c.y - min_c.y + 1;
-        block_depths[i] = max_c.z - min_c.z + 1;
-    }
-    // Step 3: Find the median block sizes
-    std::nth_element(block_widths.begin(), block_widths.begin() + num_blocks / 2, block_widths.end());
-    std::nth_element(block_heights.begin(), block_heights.begin() + num_blocks / 2, block_heights.end());
-    std::nth_element(block_depths.begin(), block_depths.begin() + num_blocks / 2, block_depths.end());
-    // Step 4: Select the block size
-    int block_size = std::max({
-        block_widths[num_blocks / 2], block_heights[num_blocks / 2], block_depths[num_blocks / 2] });
+//         Vec3i& max_c = block_maxs[node_blocks[i]];
+//         max_c.x = std::max(max_c.x, c.x);
+//         max_c.y = std::max(max_c.y, c.y);
+//         max_c.z = std::max(max_c.z, c.z);
+//     }
+//     // Step 2: Given the min and max corner of each bounding box compute the box sizes
+//     std::vector<int> block_widths(num_blocks);
+//     std::vector<int> block_heights(num_blocks);
+//     std::vector<int> block_depths(num_blocks);
+//     for (size_t i = 0; i < num_blocks; ++i) {
+//         const auto& min_c = block_mins[i];
+//         const auto& max_c = block_maxs[i];
+//         block_widths[i] = max_c.x - min_c.x + 1;
+//         block_heights[i] = max_c.y - min_c.y + 1;
+//         block_depths[i] = max_c.z - min_c.z + 1;
+//     }
+//     // Step 3: Find the median block sizes
+//     std::nth_element(block_widths.begin(), block_widths.begin() + num_blocks / 2, block_widths.end());
+//     std::nth_element(block_heights.begin(), block_heights.begin() + num_blocks / 2, block_heights.end());
+//     std::nth_element(block_depths.begin(), block_depths.begin() + num_blocks / 2, block_depths.end());
+//     // Step 4: Select the block size
+//     int block_size = std::max({
+//         block_widths[num_blocks / 2], block_heights[num_blocks / 2], block_depths[num_blocks / 2] });
 
-    uint16_t used_blocks = 
-        (width / block_size + (width % block_size == 0) ? 0 : 1) *
-        (height / block_size + (height % block_size == 0) ? 0 : 1) *
-        (depth / block_size + (depth % block_size == 0) ? 0 : 1);
+//     uint16_t used_blocks = 
+//         (width / block_size + (width % block_size == 0) ? 0 : 1) *
+//         (height / block_size + (height % block_size == 0) ? 0 : 1) *
+//         (depth / block_size + (depth % block_size == 0) ? 0 : 1);
 
-    // Build and time graphs
-    Flow flow;
-    Duration build_dur;
-    Duration solve_dur;
-    if (data_config.grid_type == GRID_TYPE_2D_4C) {
-        auto build_begin = now();
-        GridGraph_2D_4C_MT<Term, Cap, Flow> graph(width, height, config.num_threads, block_size);
-        graph.set_caps(
-            source_caps.data(),
-            sink_caps.data(),
-            nbor_cap_arrays[0][1][0].data(), // [-1, 0]
-            nbor_cap_arrays[2][1][0].data(), // [+1, 0]
-            nbor_cap_arrays[1][0][0].data(), // [ 0,-1]
-            nbor_cap_arrays[1][2][0].data()  // [ 0,+1]
-        );
-        build_dur = now() - build_begin;
+//     // Build and time graphs
+//     Flow flow;
+//     Duration build_dur;
+//     Duration solve_dur;
+//     if (data_config.grid_type == GRID_TYPE_2D_4C) {
+//         auto build_begin = now();
+//         GridGraph_2D_4C_MT<Term, Cap, Flow> graph(width, height, config.num_threads, block_size);
+//         graph.set_caps(
+//             source_caps.data(),
+//             sink_caps.data(),
+//             nbor_cap_arrays[0][1][0].data(), // [-1, 0]
+//             nbor_cap_arrays[2][1][0].data(), // [+1, 0]
+//             nbor_cap_arrays[1][0][0].data(), // [ 0,-1]
+//             nbor_cap_arrays[1][2][0].data()  // [ 0,+1]
+//         );
+//         build_dur = now() - build_begin;
 
-        auto solve_begin = now();
-        graph.compute_maxflow();
-        flow = graph.get_flow();
-        solve_dur = now() - solve_begin;
-    } else if (data_config.grid_type == GRID_TYPE_3D_6C) {
-        auto build_begin = now();
-        GridGraph_3D_6C_MT<Term, Cap, Flow> graph(width, height, depth, config.num_threads, block_size);
-        graph.set_caps(
-            source_caps.data(),
-            sink_caps.data(),
-            nbor_cap_arrays[0][1][1].data(), // [-1, 0, 0]
-            nbor_cap_arrays[2][1][1].data(), // [+1, 0, 0]
-            nbor_cap_arrays[1][0][1].data(), // [ 0,-1, 0]
-            nbor_cap_arrays[1][2][1].data(), // [ 0,+1, 0]
-            nbor_cap_arrays[1][1][0].data(), // [ 0, 0,-1]
-            nbor_cap_arrays[1][1][2].data()  // [ 0, 0,+1]
-        );
-        build_dur = now() - build_begin;
+//         auto solve_begin = now();
+//         graph.compute_maxflow();
+//         flow = graph.get_flow();
+//         solve_dur = now() - solve_begin;
+//     } else if (data_config.grid_type == GRID_TYPE_3D_6C) {
+//         auto build_begin = now();
+//         GridGraph_3D_6C_MT<Term, Cap, Flow> graph(width, height, depth, config.num_threads, block_size);
+//         graph.set_caps(
+//             source_caps.data(),
+//             sink_caps.data(),
+//             nbor_cap_arrays[0][1][1].data(), // [-1, 0, 0]
+//             nbor_cap_arrays[2][1][1].data(), // [+1, 0, 0]
+//             nbor_cap_arrays[1][0][1].data(), // [ 0,-1, 0]
+//             nbor_cap_arrays[1][2][1].data(), // [ 0,+1, 0]
+//             nbor_cap_arrays[1][1][0].data(), // [ 0, 0,-1]
+//             nbor_cap_arrays[1][1][2].data()  // [ 0, 0,+1]
+//         );
+//         build_dur = now() - build_begin;
 
-        auto solve_begin = now();
-        graph.compute_maxflow();
-        flow = graph.get_flow();
-        solve_dur = now() - solve_begin;
-    }
+//         auto solve_begin = now();
+//         graph.compute_maxflow();
+//         flow = graph.get_flow();
+//         solve_dur = now() - solve_begin;
+//     }
 
-    return std::make_tuple(flow, build_dur.count(), solve_dur.count(), used_blocks);
-#else
-    throw std::runtime_error("Parallel GridCut is not available");
-#endif
-}
+//     return std::make_tuple(flow, build_dur.count(), solve_dur.count(), used_blocks);
+// #else
+//     throw std::runtime_error("Parallel GridCut is not available");
+// #endif
+// }
 
 
 void print_config_header()
@@ -1215,14 +1310,34 @@ void bench_data(DataConfig data_config, BenchConfig bench_config, const Data& da
         case ALGO_BK:
             std::tie(flow, build_time, solve_time) = bench_bk<Cap, Term, Flow, Index, Data>(bench_config, data);
             break;
-	    case ALGO_NBK:
+	    /*case ALGO_NBK:
 	        std::tie(flow, build_time, solve_time) = bench_nbk<Cap, Term, Flow, Index, Data>(bench_config, data);
-	        break;
+	        break;*/
         case ALGO_MBK:
             std::tie(flow, build_time, solve_time) = bench_mbk<Cap, Term, Flow, Index, Data>(bench_config, data);
             break;
         case ALGO_MBK2:
             std::tie(flow, build_time, solve_time) = bench_mbk2<Cap, Term, Flow, Index, Data>(bench_config, data);
+            break;
+        case ALGO_CBK:
+            if (std::is_unsigned<Index>::value && (std::is_same<Index, std::uint32_t>::value || std::is_same<Index, std::uint64_t>::value)) {
+                std::tie(flow, build_time, solve_time) = bench_cbk<Flow, Data, Index>(bench_config, data);
+            }
+            else {
+                flow = 0;
+                build_time = 0;
+                solve_time = 0;
+            }
+            break;
+        case ALGO_FCBK:
+            if (std::is_unsigned<Index>::value && (std::is_same<Index, std::uint32_t>::value || std::is_same<Index, std::uint64_t>::value)) {
+                std::tie(flow, build_time, solve_time) = bench_fcbk<Flow, Data, Index>(bench_config, data);
+            }
+            else {
+                flow = 0;
+                build_time = 0;
+                solve_time = 0;
+            }
             break;
         case ALGO_EIBFS:
             std::tie(flow, build_time, solve_time) = bench_eibfs<Cap, Term, Flow, Index, Data>(bench_config, data);
@@ -1253,24 +1368,24 @@ void bench_data(DataConfig data_config, BenchConfig bench_config, const Data& da
             std::tie(flow, build_time, solve_time) = bench_gridcut<Cap, Term, Flow, Index, Data>(bench_config, data, data_config);
             break;
         // Parallel algorithms
-        case ALGO_PMBK:
-            std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_mbk<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
-            break;
-        case ALGO_PPR:
-            std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_pr<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
-            break;
-        case ALGO_PSK:
-            std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_sk<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
-            break;
-        case ALGO_PARD:
-            std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_rd<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
-            break;
-        case ALGO_PEIBFS:
-            std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_eibfs<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
-            break;
-        case ALGO_GRIDCUT_MT:
-            std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_gridcut<Cap, Term, Flow, Index, Data>(bench_config, data, data_config, node_blocks, num_blocks);
-            break;
+        // case ALGO_PMBK:
+        //     std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_mbk<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
+        //     break;
+        // case ALGO_PPR:
+        //     std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_pr<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
+        //     break;
+        // case ALGO_PSK:
+        //     std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_sk<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
+        //     break;
+        // case ALGO_PARD:
+        //     std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_rd<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
+        //     break;
+        // case ALGO_PEIBFS:
+        //     std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_eibfs<Cap, Term, Flow, Index, Data>(bench_config, data, node_blocks, num_blocks);
+        //     break;
+        // case ALGO_GRIDCUT_MT:
+        //     std::tie(flow, build_time, solve_time, used_blocks) = bench_parallel_gridcut<Cap, Term, Flow, Index, Data>(bench_config, data, data_config, node_blocks, num_blocks);
+        //     break;
         // Dummy and default
         case ALGO_DUMMY:
             flow = 0;
@@ -1372,6 +1487,10 @@ const char* algo_to_string(Algorithm algo)
         return "mbk";
     case ALGO_MBK2:
         return "mbk_r";
+    case ALGO_CBK:
+        return "cbk";
+    case ALGO_FCBK:
+        return "fcbk";
     case ALGO_EIBFS:
         return "eibfs_i";
     case ALGO_EIBFS2:
@@ -1419,6 +1538,8 @@ Algorithm algo_from_string(const std::string& str)
     if (str == algo_to_string(ALGO_NBK)) return ALGO_NBK;
     if (str == algo_to_string(ALGO_MBK)) return ALGO_MBK;
     if (str == algo_to_string(ALGO_MBK2)) return ALGO_MBK2;
+    if (str == algo_to_string(ALGO_CBK)) return ALGO_CBK;
+    if (str == algo_to_string(ALGO_FCBK)) return ALGO_FCBK;
     if (str == algo_to_string(ALGO_EIBFS)) return ALGO_EIBFS;
     if (str == algo_to_string(ALGO_EIBFS2)) return ALGO_EIBFS2;
     if (str == algo_to_string(ALGO_EIBFS_OLD)) return ALGO_EIBFS_OLD;

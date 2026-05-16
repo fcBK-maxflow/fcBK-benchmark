@@ -13,16 +13,17 @@
 #include "grid_cut/GridGraph_3D_6C_MT.h"
 #endif
 #include "bk/graph.h"
-#include "reimpls/liusun.h"
+// #include "reimpls/liusun.h"
 #include "reimpls/mbk.h"
 #include "reimpls/mbk_r.h"
 #include "reimpls/eibfs_i.h"
 #include "reimpls/eibfs_i_nr.h"
-#include "reimpls/parallel_ibfs.h"
+// #include "reimpls/parallel_ibfs.h"
 #include "ibfs/ibfs.h"
 #include "reimpls/hpf.h"
 #include "hi_pr/hi_pr.h"
-#include "reimpls/strandmarkkahl.h"
+// #include "reimpls/strandmarkkahl.h"
+#include <fcbk/fcbk.hpp>
 
 using Duration = std::chrono::duration<double>;
 static const auto now = std::chrono::steady_clock::now;
@@ -126,6 +127,7 @@ void bench_mbk2(const BkGraph<capty, tcapty>& bkg)
     std::cout << "total: " << (build_dur + init_dur + solve_dur).count() << " seconds, maxflow: " << flow << std::endl;
 }
 
+/*
 template <class capty, class tcapty>
 void bench_pmbk(const BkGraph<capty, tcapty>& bkg, const std::string& fname)
 {
@@ -161,7 +163,7 @@ void bench_pmbk(const BkGraph<capty, tcapty>& bkg, const std::string& fname)
     for (auto interval : block_intervals) {
         graph.add_node(interval.first, interval.second);
     }*/
-
+    /*
     for (const auto& tarc : bkg.terminal_arcs) {
         graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
     }
@@ -179,6 +181,131 @@ void bench_pmbk(const BkGraph<capty, tcapty>& bkg, const std::string& fname)
     std::cout << "solved in " << solve_dur.count() << " seconds" << std::endl;
 
     std::cout << "total: " << (build_dur + solve_dur).count() << " seconds, maxflow: " << flow << std::endl;
+}
+*/
+
+template <class capty, class tcapty>
+void bench_cbk(const BkGraph<capty, tcapty>& bkg)
+{
+    std::cout << "building... ";
+    auto build_begin = now();
+
+    fcbk::Graph<uint32_t, false> graph(bkg.num_nodes);
+    for (const auto& tarc : bkg.terminal_arcs) {
+        graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+    }
+    for (const auto& narc : bkg.neighbor_arcs) {
+        graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+    }
+    Duration build_dur = now() - build_begin;
+    std::cout << build_dur.count() << " seconds" << std::endl;
+
+    std::cout << "init... ";
+    auto init_begin = now();
+    graph.init_maxflow();
+    Duration init_dur = now() - init_begin;
+    std::cout << init_dur.count() << " seconds" << std::endl;
+
+    std::cout << "solving... ";
+    auto solve_begin = now();
+    auto flow = graph.maxflow();
+    Duration solve_dur = now() - solve_begin;
+    std::cout << solve_dur.count() << " seconds" << std::endl;
+
+    std::cout << "total: " << (build_dur + init_dur + solve_dur).count() << " seconds, maxflow: " << flow << std::endl;
+}
+
+template <class capty, class tcapty>
+void bench_cbk_rel(const BkGraph<capty, tcapty>& bkg)
+{
+    std::cout << "building... ";
+    auto build_begin = now();
+
+    fcbk::Graph<uint64_t, false> graph(bkg.num_nodes);
+    for (const auto& tarc : bkg.terminal_arcs) {
+        graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+    }
+    for (const auto& narc : bkg.neighbor_arcs) {
+        graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+    }
+    Duration build_dur = now() - build_begin;
+    std::cout << build_dur.count() << " seconds" << std::endl;
+
+    std::cout << "init... ";
+    auto init_begin = now();
+    graph.init_maxflow();
+    Duration init_dur = now() - init_begin;
+    std::cout << init_dur.count() << " seconds" << std::endl;
+
+    std::cout << "solving... ";
+    auto solve_begin = now();
+    auto flow = graph.maxflow();
+    Duration solve_dur = now() - solve_begin;
+    std::cout << solve_dur.count() << " seconds" << std::endl;
+
+    std::cout << "total: " << (build_dur + init_dur + solve_dur).count() << " seconds, maxflow: " << flow << std::endl;
+}
+
+template <class capty, class tcapty>
+void bench_fcbk(const BkGraph<capty, tcapty>& bkg)
+{
+    std::cout << "building... ";
+    auto build_begin = now();
+
+    fcbk::Graph<uint32_t, true> graph(bkg.num_nodes);
+    for (const auto& tarc : bkg.terminal_arcs) {
+        graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+    }
+    for (const auto& narc : bkg.neighbor_arcs) {
+        graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+    }
+    Duration build_dur = now() - build_begin;
+    std::cout << build_dur.count() << " seconds" << std::endl;
+
+    std::cout << "init... ";
+    auto init_begin = now();
+    graph.init_maxflow();
+    Duration init_dur = now() - init_begin;
+    std::cout << init_dur.count() << " seconds" << std::endl;
+
+    std::cout << "solving... ";
+    auto solve_begin = now();
+    auto flow = graph.maxflow();
+    Duration solve_dur = now() - solve_begin;
+    std::cout << solve_dur.count() << " seconds" << std::endl;
+
+    std::cout << "total: " << (build_dur + init_dur + solve_dur).count() << " seconds, maxflow: " << flow << std::endl;
+}
+
+template <class capty, class tcapty>
+void bench_fcbk_rel(const BkGraph<capty, tcapty>& bkg)
+{
+    std::cout << "building... ";
+    auto build_begin = now();
+
+    fcbk::Graph<uint64_t, true> graph(bkg.num_nodes);
+    for (const auto& tarc : bkg.terminal_arcs) {
+        graph.add_tweights(tarc.node, tarc.source_cap, tarc.sink_cap);
+    }
+    for (const auto& narc : bkg.neighbor_arcs) {
+        graph.add_edge(narc.i, narc.j, narc.cap, narc.rev_cap);
+    }
+    Duration build_dur = now() - build_begin;
+    std::cout << build_dur.count() << " seconds" << std::endl;
+
+    std::cout << "init... ";
+    auto init_begin = now();
+    graph.init_maxflow();
+    Duration init_dur = now() - init_begin;
+    std::cout << init_dur.count() << " seconds" << std::endl;
+
+    std::cout << "solving... ";
+    auto solve_begin = now();
+    auto flow = graph.maxflow();
+    Duration solve_dur = now() - solve_begin;
+    std::cout << solve_dur.count() << " seconds" << std::endl;
+
+    std::cout << "total: " << (build_dur + init_dur + solve_dur).count() << " seconds, maxflow: " << flow << std::endl;
 }
 
 template <class capty, class tcapty>
@@ -278,6 +405,7 @@ void bench_ibfs_old(const BkGraph<capty, tcapty>& bkg)
     std::cout << " seconds, maxflow: " << flow << std::endl;
 }
 
+/*
 template <class capty, class tcapty>
 void bench_pibfs(const BkGraph<capty, tcapty>& bkg)
 {
@@ -296,6 +424,7 @@ void bench_pibfs(const BkGraph<capty, tcapty>& bkg)
         graph.registerNodes(begin, begin + num_nodes, i);
         begin += num_nodes;
     }*/
+   /*
     uint16_t num_blocks;
     std::vector<std::pair<size_t, uint16_t>> block_intervals;
     std::tie(block_intervals, num_blocks) = grid_block_intervals(256, 256, 119, 128, 128, 64);
@@ -331,6 +460,7 @@ void bench_pibfs(const BkGraph<capty, tcapty>& bkg)
     std::cout << "total: " << (build_dur + init_dur + solve_dur).count();
     std::cout << " seconds, maxflow: " << flow << std::endl;
 }
+*/
 
 /*void bench_ppr(const BkGraph<int, int>& bkg)
 {
@@ -488,6 +618,7 @@ void bench_hi_pr(const BkGraph<int, int> bkg)
     std::cout << "maxflow: " << graph.flow / 2 << ", iters: " << graph.iter << std::endl;
 }*/
 
+/*
 template <class capty, class tcapty>
 void bench_sk(const BkGraph<capty, tcapty> bkg)
 {
@@ -539,6 +670,7 @@ void bench_sk(const BkGraph<capty, tcapty> bkg)
     std::cout << "total: " << (init_dur + build_dur + solve_dur).count() << " seconds, ";
     std::cout << "maxflow: " << flow / 2 << ", iters: " << graph.get_iter() << std::endl;
 }
+*/
 
 #ifdef GRIDCUT_IS_AVAILABLE
 template <class capty, class tcapty>
@@ -850,10 +982,24 @@ int main(int argc, const char* argv[])
             } else if (algo == "mbk_r") {
                 std::cerr << "MBK2:" << std::endl;
                 bench_mbk2(bkg);
-            } else if (algo == "liusun") {
-                std::cerr << "Parallel MBK:" << std::endl;
-                bench_pmbk(bkg, fname);
-            } else if (algo == "eibfs") {
+            } else if (algo == "cbk") {
+                std::cerr << "cbk:" << std::endl;
+                bench_cbk(bkg);
+            } else if (algo == "cbk_rel") {
+                std::cerr << "cbk (relative):" << std::endl;
+                bench_cbk_rel(bkg);
+            } else if (algo == "fcbk") {
+                std::cerr << "fcbk:" << std::endl;
+                bench_fcbk(bkg);
+            } else if (algo == "fcbk_rel") {
+                std::cerr << "fcbk (relative):" << std::endl;
+                bench_fcbk_rel(bkg);
+            }
+            // else if (algo == "liusun") {
+            //     std::cerr << "Parallel MBK:" << std::endl;
+            //     bench_pmbk(bkg, fname);
+            // } 
+            else if (algo == "eibfs") {
                 std::cerr << "EIBFS old:" << std::endl;
                 bench_ibfs_old(bkg);
             } else if (algo =="eibfs_i") {
@@ -862,13 +1008,15 @@ int main(int argc, const char* argv[])
             } else if (algo =="eibfs_i_nr") {
                 std::cerr << "EIBFS new2:" << std::endl;
                 bench_ibfs2(bkg);
-            } else if (algo =="peibfs") {
-                std::cerr << "Parallel EIBFS:" << std::endl;
-                bench_pibfs(bkg);
-            } /*else if (algo =="ppr") {
-                std::cerr << "Parallel PR:" << std::endl;
-                bench_ppr(bkg);
-            } */else if (algo =="hpf") {
+            } 
+            // else if (algo =="peibfs") {
+            //     std::cerr << "Parallel EIBFS:" << std::endl;
+            //     bench_pibfs(bkg);
+            // } else if (algo =="ppr") {
+            //     std::cerr << "Parallel PR:" << std::endl;
+            //     bench_ppr(bkg);
+            // } 
+            else if (algo =="hpf") {
                 std::cerr << "HPF:" << std::endl;
                 bench_hpf(bkg);
             } else if (algo =="hi_pr") {
@@ -877,10 +1025,10 @@ int main(int argc, const char* argv[])
             } /*else if (algo =="sk_old") {
                 std::cerr << "Strandmark-Kahl old:" << std::endl;
                 bench_sk_old(bkg);
-            }*/ else if (algo =="psk") {
+            } else if (algo =="psk") {
                 std::cerr << "Strandmark-Kahl new:" << std::endl;
                 bench_sk(bkg);
-            }
+            }*/
 #ifdef GRIDCUT_IS_AVAILABLE
             else if (algo == "gridcut") {
                 std::cerr << "GridCut:" << std::endl;

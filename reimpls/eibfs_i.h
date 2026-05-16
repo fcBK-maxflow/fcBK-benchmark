@@ -65,10 +65,10 @@ namespace reimpls {
 
 template <class Cap, class Term, class Flow, class NodeIdx = uint32_t, class ArcIdx = uint32_t>
 class IBFSGraph {
-    static constexpr size_t ALLOC_INIT_LEVELS = 4096;
+    inline static constexpr size_t ALLOC_INIT_LEVELS = 4096;
 
-    static const NodeIdx INVALID_NODE = ~NodeIdx(0); // -1 for signed type, max. value for unsigned type
-    static const ArcIdx INVALID_ARC = ~ArcIdx(0); // -1 for signed type, max. value for unsigned type
+    inline static const NodeIdx INVALID_NODE = ~NodeIdx(0); // -1 for signed type, max. value for unsigned type
+    inline static const ArcIdx INVALID_ARC = ~ArcIdx(0); // -1 for signed type, max. value for unsigned type
 
     using Dist = std::make_signed_t<NodeIdx>;
 

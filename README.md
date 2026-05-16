@@ -1,3 +1,7 @@
+### *Fork details*
+
+This is a minimum-edit fork, allowing the user to demo and benchmark the <a href="https://fcbk-maxflow.github.io/">fcBK algorithm</a>! Most parallel algorithms have been commented out as the focus of this fork is serial algorithms. This fork includes a Makefile for ease of use (linux only). Note that details for system and version is outdated in the description below. To see what was used during testing of the fcBK algorithm see <a href="https://github.com/fcBK-maxflow/fcBK/blob/main/README.md">this</a>.
+
 # Max-Flow/Min-Cut Algorithms
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4903945.svg)](https://doi.org/10.5281/zenodo.4903945)
@@ -42,6 +46,8 @@ This collection includes the following implementations:
 * `ppr` - Author reference implementation of a synchronous parallel push-relabel method from Baumstark et al., "Efficient implementation of a synchronous parallel push-relabel algorithm", 2015, ESA.
 * `psk` - Our re-implementation of the parallel dual decomposition approach from Strandmark & Kahl, "Parallel and Distributed Graph Cuts by Dual Decomposition", 2010, CVPR.
 * `peibfs` - Our implementation of the parallel bottom-up mering approach by Liu and Sun but using EIBFS instead of BK for the max-flow/min-cut computations. Due to high initialization costs, this implementation generally performs worse than the BK version.
+* `cbk` - *Fork specific*: This is the BK algorithm with the compact graph representation. For more information, see <a href="https://github.com/fcBK-maxflow/fcBK">this repo</a>.
+* `fcbk` - *Fork specific*: This is the fcBK algorithm with the compact graph representation. For more information, see <a href="https://github.com/fcBK-maxflow/fcBK">this repo</a>.
 
 ## Programs
 
@@ -181,6 +187,8 @@ The original author implementations are released under their own licenses. Where
 * `reimpls`: MIT license.
 * `sk`: Unknown. Contact orignal author for more information.
 * `sppr`: Unknown. Contact original author for more information.
+* `cBK`: MIT license.
+* `fcBK`: MIT license.
 
 ## Binary File Formats
 

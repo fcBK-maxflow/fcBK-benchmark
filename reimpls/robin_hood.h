@@ -47,6 +47,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <limits>      // used for std::numeric_limits
 
 // #define ROBIN_HOOD_LOG_ENABLED
 #ifdef ROBIN_HOOD_LOG_ENABLED

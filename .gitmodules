@@ -1,0 +1,3 @@
+[submodule "external/fcBK"]
+	path = external/fcBK
+	url = https://github.com/fcBK-maxflow/fcBK
