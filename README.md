@@ -2,6 +2,8 @@
 
 This is a minimum-edit fork, allowing the user to demo and benchmark the <a href="https://fcbk-maxflow.github.io/">fcBK algorithm</a>! Most parallel algorithms have been commented out as the focus of this fork is serial algorithms. This fork includes a Makefile for ease of use (linux only). Note that details for system and version is outdated in the description below. To see what was used during testing of the fcBK algorithm see <a href="https://github.com/fcBK-maxflow/fcBK/blob/main/README.md">this</a>.
 
+When cloning this repo, make sure to use the `--recurse-submodules` flag, as <a href="https://github.com/fcBK-maxflow/fcBK">fcBK</a> is included as a submodule!
+
 # Max-Flow/Min-Cut Algorithms
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4903945.svg)](https://doi.org/10.5281/zenodo.4903945)
